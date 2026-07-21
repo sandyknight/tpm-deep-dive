@@ -21,8 +21,9 @@ OHID master/layouts.
 
 - **Python ≥ 3.12** with polars. With uv this is automatic; without it:
   `python -m venv .venv`, activate, `pip install -r requirements.txt`.
-- **R ≥ 4.x** with: `box`, `dplyr`, `purrr`, `tibble`, `broom`,
-  `nanoparquet`, `ggplot2`, `flextable`, `officer`, `systemfonts`.
+- **R ≥ 4.x**: packages are pinned with renv — from an R session in the
+  project root, `renv::restore()` installs everything at the locked
+  versions (renv activates automatically via the project `.Rprofile`).
 
 ## Running
 

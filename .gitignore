@@ -8,13 +8,11 @@ slides/
 __pycache__/
 .ruff_cache
 
-# R environment and session files
+# R environment and session files (.Rprofile is tracked: it holds the renv
+# activation line; renv/ has its own .gitignore for the project library)
 .Rhistory
 .RData
 .Rproj.user/
 
 # Claude Code config (keep as-is)
 .claude
-
-# R profile (keep as-is)
-.Rprofile
