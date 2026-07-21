@@ -1,20 +1,97 @@
-# Cross-platform pipeline runner: the equivalent of `make all` for machines
-# without make or uv (e.g. Windows). Requires only R and a Python (>= 3.12,
-# with polars installed) findable via .venv, PATH, or the PIPELINE_PYTHON
-# environment variable.
+# pipeline.R — cross-platform pipeline runner (the `make all` equivalent for
+# machines without make or uv, i.e. the Windows estate).
 #
-# Usage, from the project root:  Rscript pipeline.R [--force]
+# Usage, always from the project root:
 #
-# Stages are skipped when their outputs are newer than all of their inputs,
-# mirroring the Makefile; --force reruns everything.
+#   Rscript pipeline.R            # run whatever is out of date
+#   Rscript pipeline.R --force    # rerun every stage regardless
+#
+# The pipeline is three stages, each a separate process:
+#
+#   [1] data    python main.py          raw CSV -> data/*.parquet
+#   [2] fits    Rscript R/fit_models.R  data parquets -> fit_summaries/*.parquet
+#   [3] slides  Rscript R/make_slides.R fits + templates/ohid_theme.pptx
+#                                         -> slides/tpm_odds_ratio_slides.pptx
+#
+# A stage is skipped when all of its outputs are newer than all of its
+# inputs (plain file-mtime comparison, same idea as make). Editing a script,
+# the config, or the raw data therefore reruns the right stages on the next
+# invocation.
+#
+# What this script assumes:
+#   - Working directory is the project root (it stops immediately if not).
+#   - config.toml's raw_data points at the raw NDTMS extract.
+#   - R packages restored: renv::restore() has been run (renv activates
+#     itself through the project .Rprofile whenever R starts in this
+#     directory — including the Rscript children this script launches).
+#   - A Python >= 3.12 with polars (see "How Python is found" below).
+#
+# ---------------------------------------------------------------------------
+# DEBUGGING GUIDE (written for the locked-down Windows machines)
+#
+# First move: run the failing stage by hand from the project root —
+#
+#   <python> main.py
+#   Rscript R/fit_models.R
+#   Rscript R/make_slides.R
+#
+# — because this script adds nothing to a stage except deciding whether to
+# run it; a stage that fails here fails identically when run by hand, and
+# by hand you see the full traceback.
+#
+# Failures BEFORE any stage runs:
+#   "Run this from the project root"  -> cd to the repo first; relative
+#       paths everywhere in the pipeline assume it.
+#   "Missing pipeline input(s): ..."  -> an *input* file doesn't exist.
+#       If it names the raw CSV, config.toml's raw_data is wrong for this
+#       machine (note it is relative to the project root, and forward
+#       slashes are fine on Windows). If it names a script or the pptx
+#       template, the checkout is incomplete.
+#
+# Stage [1] failures:
+#   "No Python found..."   -> see "How Python is found" below; easiest fix
+#       is setting the PIPELINE_PYTHON environment variable to the full
+#       path of a python.exe that has polars installed.
+#   ModuleNotFoundError: polars / tomllib -> wrong interpreter (tomllib
+#       means Python < 3.11): pip install -r requirements.txt into the
+#       interpreter being used, or point PIPELINE_PYTHON at the right one.
+#   Memory/speed: this stage streams a ~4 GB CSV; a few minutes on a
+#       laptop is normal, an instant crash is not.
+#
+# Stage [2]/[3] failures:
+#   "there is no package called ..." -> renv library not restored (run
+#       renv::restore() in an R session here), or R was started somewhere
+#       that skipped .Rprofile so the system library is being used.
+#   box "unable to load module" -> almost always working-directory related;
+#       both R stages resolve mod/ relative to the R/ directory and data
+#       relative to the project root, so run them exactly as shown above.
+#   Stage [2] parallelises via mirai daemons (separate Rscript processes,
+#       works on Windows). If a daemon dies silently, rerun after
+#       mirai::daemons(0) in a fresh session, or check a corporate
+#       process-spawn/AV policy isn't killing child Rscript processes.
+#   renv::status() printing an R-version note (lockfile 4.5.1 vs a newer
+#       local R) is informational, never the cause of a failure.
+#
+# Skipping behaves wrongly? Timestamps are the only mechanism. Check with
+#   file.mtime() that outputs really are newer than inputs; cloud-synced
+#   folders (OneDrive) are known to produce misleading mtimes. --force
+#   sidesteps the question entirely.
+# ---------------------------------------------------------------------------
 
-# Flat "key = \"value\"" extraction, not a full TOML parser (see config.toml)
+# --- Configuration ---------------------------------------------------------
+
+# raw_data comes from config.toml. This is a flat 'key = "value"' text
+# extraction, not a TOML parser (deliberate: no extra R dependency), so the
+# line in config.toml must stay in exactly that shape.
 RAW <- sub(
   '^raw_data\\s*=\\s*"([^"]*)".*$',
   "\\1",
   grep("^raw_data\\s*=", readLines("config.toml"), value = TRUE)[[1]]
 )
 TEMPLATE <- "templates/ohid_theme.pptx"
+
+# Stage outputs. DATA lists only the parquets consumed downstream; stage
+# [1] writes the per-variable parquets alongside them in the same pass.
 DATA <- c(
   "data/tpm_Basic_dataset.parquet",
   "data/tpm_classification_completeness.parquet",
@@ -25,10 +102,22 @@ DATA <- c(
 FITS <- "fit_summaries/tpm_odds_ratios.parquet"
 SLIDES <- "slides/tpm_odds_ratio_slides.pptx"
 
+# Refuse to run from anywhere but the project root: every path above is
+# root-relative, and the R stages assume it too.
 if (!file.exists("pipeline.R") || !dir.exists("R")) {
   stop("Run this from the project root: Rscript pipeline.R")
 }
 
+# --- How Python is found ---------------------------------------------------
+# In order:
+#   1. PIPELINE_PYTHON environment variable, if set — always wins. Set it
+#      to a full path to python.exe when the automatic options misfire.
+#   2. The project virtualenv: .venv/Scripts/python.exe (Windows) or
+#      .venv/bin/python (elsewhere).
+#   3. First of python / python3 on PATH. Note the Microsoft Store
+#      "python" shim on Windows can be found here yet do nothing useful —
+#      that presents as stage [1] "failing" with no output; use
+#      PIPELINE_PYTHON to bypass it.
 find_python <- function() {
   override <- Sys.getenv("PIPELINE_PYTHON", "")
   if (nzchar(override)) {
@@ -53,6 +142,12 @@ find_python <- function() {
   path[[1]]
 }
 
+# --- Stage machinery -------------------------------------------------------
+
+# TRUE if the stage must run: an output is missing, or the newest input is
+# newer than the oldest output. Missing *inputs* are an error, not a
+# trigger: a stage can never succeed without them, so fail loudly here
+# with the offending path rather than obscurely mid-stage.
 stale <- function(targets, deps) {
   missing <- deps[!file.exists(deps)]
   if (length(missing) > 0) {
@@ -62,6 +157,9 @@ stale <- function(targets, deps) {
     max(file.mtime(deps)) > min(file.mtime(targets))
 }
 
+# Announce and run one stage; abort the pipeline on non-zero exit so later
+# stages never consume half-written outputs. The stage's own stdout/stderr
+# pass straight through, so its error messages appear above the abort.
 run_stage <- function(label, cmd, args) {
   message("== ", label, ": ", cmd, " ", paste(args, collapse = " "))
   status <- system2(cmd, args)
@@ -71,7 +169,16 @@ run_stage <- function(label, cmd, args) {
 }
 
 force <- "--force" %in% commandArgs(trailingOnly = TRUE)
+
+# Children are launched from this R's own installation, not from PATH —
+# on Windows Rscript is typically *not* on PATH, and this also guarantees
+# the stages run under the same R version as the runner.
 rscript <- file.path(R.home("bin"), "Rscript")
+
+# --- The three stages ------------------------------------------------------
+# Each stage's dependency list includes the scripts that produce it, so
+# editing one triggers the right rebuilds. config.toml is a data-stage
+# input because raw_data lives in it.
 
 if (force || stale(DATA, c("main.py", "src/lib.py", "config.toml", RAW))) {
   run_stage("data", find_python(), "main.py")
@@ -79,7 +186,10 @@ if (force || stale(DATA, c("main.py", "src/lib.py", "config.toml", RAW))) {
   message("== data: up to date")
 }
 
-if (force || stale(FITS, c("R/fit_models.R", "R/mod/models.R", "R/mod/lib.R", DATA))) {
+if (
+  force ||
+    stale(FITS, c("R/fit_models.R", "R/mod/models.R", "R/mod/lib.R", DATA))
+) {
   run_stage("fits", rscript, "R/fit_models.R")
 } else {
   message("== fits: up to date")
