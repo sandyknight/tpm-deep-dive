@@ -1,0 +1,20 @@
+# Data and outputs (data-derived, not committable)
+data/
+fit_summaries/
+slides/
+
+# Python environment and cache
+.venv
+__pycache__/
+.ruff_cache
+
+# R environment and session files
+.Rhistory
+.RData
+.Rproj.user/
+
+# Claude Code config (keep as-is)
+.claude
+
+# R profile (keep as-is)
+.Rprofile

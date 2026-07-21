@@ -1,0 +1,6 @@
+# R here is linked against Intel MKL (see sessionInfo()$BLAS). With MKL's
+# default Intel OpenMP threading layer alongside the GNU OpenMP runtime that
+# compiled packages load, multithreaded BLAS calls return WRONG RESULTS
+# silently — glm() IRLS diverged to coefficients ~1e19 on this project's data.
+# Forcing the GNU threading layer fixes it. Do not remove.
+MKL_THREADING_LAYER=GNU

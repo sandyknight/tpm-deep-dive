@@ -1,0 +1,52 @@
+# TPM odds-ratio analysis
+
+Logistic-regression odds ratios for the NDTMS Treatment Progress Measure:
+Python pre-processes the raw extract into parquet datasets, R fits the GLMs
+and builds the PowerPoint deck. Parquet files in `data/` are the contract
+between the two stages.
+
+## Layout
+
+- `main.py`, `src/` — pre-processing (raw CSV → `data/*.parquet`)
+- `R/fit_models.R`, `R/mod/` — weighted binomial GLMs → `fit_summaries/`
+- `R/make_slides.R` — OR slide deck → `slides/`
+- `Makefile` / `pipeline.R` — orchestrators (see below)
+
+Expected alongside the repo (never committed):
+
+- `../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv` — raw extract
+- `../shared/retention_odds_ratio_slides.pptx` — slide template
+
+## Prerequisites
+
+- **Python ≥ 3.12** with polars. With uv this is automatic; without it:
+  `python -m venv .venv`, activate, `pip install -r requirements.txt`.
+- **R ≥ 4.x** with: `box`, `dplyr`, `purrr`, `tibble`, `broom`,
+  `nanoparquet`, `ggplot2`, `flextable`, `officer`, `systemfonts`.
+
+## Running
+
+Linux/macOS with make (uses uv by default; `make PYTHON=python` without it):
+
+```sh
+make            # everything that is out of date
+make fits       # just up to the GLMs
+```
+
+Anywhere, including Windows, no make or uv required:
+
+```sh
+Rscript pipeline.R           # same stage-skipping as make
+Rscript pipeline.R --force   # rerun everything
+```
+
+`pipeline.R` finds Python via `.venv`, then `PATH`; set the
+`PIPELINE_PYTHON` environment variable to point at a specific interpreter.
+
+## Notes
+
+- `.Renviron` sets `MKL_THREADING_LAYER=GNU`: on Linux machines where R is
+  linked against Intel MKL, multithreaded BLAS otherwise returns silently
+  wrong GLM coefficients. Harmless elsewhere — do not remove.
+- Nothing data-derived (`data/`, `fit_summaries/`, `slides/`) is ever
+  committed; the source extract is OFFICIAL_SENSITIVE.
