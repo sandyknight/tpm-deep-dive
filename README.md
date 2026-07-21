@@ -49,6 +49,16 @@ Rscript pipeline.R --force   # rerun everything
 
 ## Notes
 
+- The lockfile resolves packages from a dated Posit Package Manager
+  snapshot (see `renv.lock`), which — unlike CRAN — serves Windows
+  binaries for historical package versions, for current and old-release
+  R. `renv::restore()` on Windows should therefore never need Rtools.
+  If a source build is ever attempted anyway on a locked-down machine,
+  the usual culprit is TEMP pointing at a no-execute/network path — set
+  `TMPDIR` to a local directory (e.g. `C:\Temp`) in `.Renviron`.
+- Running R here (4.6.1) with the lockfile pinned to 4.5.1 makes
+  `renv::status()` print a version note; it's informational only.
+
 - `.Renviron` sets `MKL_THREADING_LAYER=GNU`: on Linux machines where R is
   linked against Intel MKL, multithreaded BLAS otherwise returns silently
   wrong GLM coefficients. Harmless elsewhere — do not remove.
