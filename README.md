@@ -21,9 +21,12 @@ OHID master/layouts.
 
 - **Python ≥ 3.12** with polars. With uv this is automatic; without it:
   `python -m venv .venv`, activate, `pip install -r requirements.txt`.
-- **R ≥ 4.x**: packages are pinned with renv — from an R session in the
+- **R ≥ 4.5.1**: packages are pinned with renv — from an R session in the
   project root, `renv::restore()` installs everything at the locked
   versions (renv activates automatically via the project `.Rprofile`).
+  Every locked package declares an R floor of 4.1 or lower, and the
+  lockfile's recorded R version is pinned to 4.5.1 via
+  `renv::settings$r.version`, so restores on 4.5.1 won't warn.
 
 ## Running
 
