@@ -64,56 +64,76 @@ annual_periods <- df |>
   dplyr::pull(data_period) |>
   sort()
 
-run_analysis <- function(data, name, spec, period_label) {
-  res <- models$fit_exposure_glm(
-    data,
-    exposure = spec$exposure,
-    adjust = spec$adjust,
-    geography = spec$geography
-  )
-  message(sprintf(
-    "%-16s %-18s geography=%-8s%s",
-    name,
-    period_label,
-    res$geography,
-    if (isTRUE(res$la_separation)) "  [LA separation -> region]" else ""
-  ))
-  models$tidy_ors(res$fit, spec$exposure) |>
-    dplyr::mutate(
-      analysis = name,
-      data_period = period_label,
-      geography = res$geography,
-      la_separation = res$la_separation,
-      .before = 1
+# Runs one fit on a mirai daemon. Daemons are fresh processes (which is why
+# this parallelises on Windows too, unlike forking), so the function must be
+# self-contained: the box module is loaded inside the worker via box.path,
+# and `df` is shipped to it explicitly.
+fit_job <- purrr::in_parallel(
+  \(job) {
+    Sys.setenv(MKL_NUM_THREADS = "2") # workers mustn't oversubscribe BLAS
+    options(box.path = box_path)
+    box::use(mod / models)
+    data <- droplevels(dplyr::filter(df, data_period %in% job$periods))
+    res <- models$fit_exposure_glm(
+      data,
+      exposure = job$spec$exposure,
+      adjust = job$spec$adjust,
+      geography = job$spec$geography
     )
-}
+    models$tidy_ors(res$fit, job$spec$exposure) |>
+      dplyr::mutate(
+        analysis = job$name,
+        data_period = job$label,
+        geography = res$geography,
+        la_separation = res$la_separation,
+        .before = 1
+      )
+  },
+  df = df,
+  box_path = file.path(getwd(), "R")
+)
 
-annual_fits <- purrr::map(annual_periods, function(period) {
-  data <- df |>
-    dplyr::filter(data_period == period) |>
-    droplevels()
-  purrr::imap(ANALYSES, \(spec, name) run_analysis(data, name, spec, period))
-})
+# Every fit (period x analysis, plus the pooled ones) is independent, so
+# run them all as one flat job list. The pooled post-break fits are
+# legitimate pooling — the annual -03-31 periods are disjoint (unlike the
+# rolling periods) — and they are the slowest single fits, so they must
+# start first, not run serially after the annual batch.
+annual_jobs <- purrr::flatten(purrr::map(annual_periods, function(period) {
+  purrr::imap(ANALYSES, \(spec, name) {
+    list(name = name, spec = spec, periods = period, label = period)
+  })
+}))
 
-# Pooled post-break fit: the annual -03-31 periods are disjoint, so pooling
-# with a period covariate is legitimate (unlike the rolling periods).
-pooled_fits <- purrr::imap(ANALYSES, function(spec, name) {
+pooled_jobs <- purrr::imap(ANALYSES, function(spec, name) {
   spec$adjust <- c(spec$adjust, "data_period")
-  data <- df |>
-    dplyr::filter(data_period %in% POOLED_PERIODS) |>
-    droplevels()
-  run_analysis(
-    data,
-    name,
-    spec,
-    paste(range(POOLED_PERIODS), collapse = " to ")
+  list(
+    name = name,
+    spec = spec,
+    periods = POOLED_PERIODS,
+    label = paste(range(POOLED_PERIODS), collapse = " to ")
   )
 })
 
-results <- purrr::list_rbind(c(
-  purrr::flatten(annual_fits),
-  unname(pooled_fits)
-))
+jobs <- c(unname(pooled_jobs), annual_jobs)
+
+mirai::daemons(min(length(jobs), parallel::detectCores()))
+fits <- purrr::map(jobs, fit_job)
+mirai::daemons(0)
+
+results <- purrr::list_rbind(fits)
+
+# Fit log, printed post hoc: worker messages don't surface from daemons
+results |>
+  dplyr::distinct(analysis, data_period, geography, la_separation) |>
+  purrr::pwalk(\(analysis, data_period, geography, la_separation) {
+    message(sprintf(
+      "%-16s %-18s geography=%-8s%s",
+      analysis,
+      data_period,
+      geography,
+      if (isTRUE(la_separation)) "  [LA separation -> region]" else ""
+    ))
+  })
 
 dir.create("./fit_summaries", showWarnings = FALSE)
 nanoparquet::write_parquet(
