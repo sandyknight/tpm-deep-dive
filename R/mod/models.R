@@ -34,18 +34,26 @@ fit_exposure_glm <- function(
   res
 }
 
+# Collapses to one row per covariate cell (successes/failures counts) and
+# fits in binomial cbind form rather than weighted-Bernoulli form: the
+# likelihood is identical up to a constant, so estimates and profile CIs
+# match exactly, but IRLS and every profile refit see half the rows. The
+# deviance also stops carrying each client's irreducible Bernoulli entropy,
+# so the default convergence tolerance is meaningful again (the previous
+# form needed epsilon = 1e-12 or profile.glm would find a better optimum).
 fit_once <- function(data, rhs) {
+  cells <- data |>
+    dplyr::summarise(
+      n_showing = sum(value[tpm_value == 1L]),
+      n_not_yet = sum(value[tpm_value == 0L]),
+      .by = dplyr::all_of(rhs)
+    )
   separation <- FALSE
   fit <- withCallingHandlers(
     stats::glm(
-      stats::reformulate(rhs, response = "tpm_value"),
-      data = data,
-      weights = value,
-      family = stats::binomial(link = "logit"),
-      # Cell weights are in the hundreds of thousands, so the default relative
-      # deviance tolerance stops early enough that profile.glm later finds a
-      # better optimum and errors. Tighten it.
-      control = stats::glm.control(epsilon = 1e-12, maxit = 100)
+      stats::reformulate(rhs, response = quote(cbind(n_showing, n_not_yet))),
+      data = cells,
+      family = stats::binomial(link = "logit")
     ),
     warning = function(w) {
       if (

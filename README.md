@@ -12,10 +12,10 @@ between the two stages.
 - `R/make_slides.R` — OR slide deck → `slides/`
 - `Makefile` / `pipeline.R` — orchestrators (see below)
 
-Expected alongside the repo (never committed):
-
-- `../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv` — raw extract
-- `../shared/retention_odds_ratio_slides.pptx` — slide template
+The raw extract lives outside the repo (never committed); its location is
+set in `config.toml` (`raw_data`, default `../shared/...`). The slide theme
+is self-contained: `templates/ohid_theme.pptx` is a blank deck carrying the
+OHID master/layouts.
 
 ## Prerequisites
 

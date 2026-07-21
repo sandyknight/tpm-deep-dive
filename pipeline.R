@@ -8,11 +8,19 @@
 # Stages are skipped when their outputs are newer than all of their inputs,
 # mirroring the Makefile; --force reruns everything.
 
-RAW <- "../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv"
-TEMPLATE <- "../shared/retention_odds_ratio_slides.pptx"
+# Flat "key = \"value\"" extraction, not a full TOML parser (see config.toml)
+RAW <- sub(
+  '^raw_data\\s*=\\s*"([^"]*)".*$',
+  "\\1",
+  grep("^raw_data\\s*=", readLines("config.toml"), value = TRUE)[[1]]
+)
+TEMPLATE <- "templates/ohid_theme.pptx"
 DATA <- c(
   "data/tpm_Basic_dataset.parquet",
-  "data/tpm_classification_completeness.parquet"
+  "data/tpm_classification_completeness.parquet",
+  "data/tpm_AccmneedStart.parquet",
+  "data/tpm_RefSrcGrp.parquet",
+  "data/tpm_PrevJourneys.parquet"
 )
 FITS <- "fit_summaries/tpm_odds_ratios.parquet"
 SLIDES <- "slides/tpm_odds_ratio_slides.pptx"
@@ -65,7 +73,7 @@ run_stage <- function(label, cmd, args) {
 force <- "--force" %in% commandArgs(trailingOnly = TRUE)
 rscript <- file.path(R.home("bin"), "Rscript")
 
-if (force || stale(DATA, c("main.py", "src/lib.py", RAW))) {
+if (force || stale(DATA, c("main.py", "src/lib.py", "config.toml", RAW))) {
   run_stage("data", find_python(), "main.py")
 } else {
   message("== data: up to date")

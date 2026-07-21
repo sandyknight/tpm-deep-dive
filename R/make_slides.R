@@ -1,12 +1,16 @@
-# Build the TPM odds-ratio slide deck, styled to match the retention deck
-# (../shared/retention_odds_ratio_slides.pptx): per exposure, a headline slide
-# (forest plot left, results table right) and an annual trend slide (faceted
-# chart, diamonds coloured by 95% significance). Charts are embedded as PNGs
-# on the retention deck's own master/layout so the OHID branding carries over.
+# Build the TPM odds-ratio slide deck, styled to match the retention deck:
+# per exposure, a headline slide (forest plot left, results table right) and
+# an annual trend slide (faceted chart, diamonds coloured by 95%
+# significance). Charts are embedded as PNGs on the OHID master/layout from
+# templates/ohid_theme.pptx so the branding carries over. Chart/table
+# geometry is hardcoded below, lifted from the retention deck's slide XML
+# (EMU / 914400 = inches).
 
 library(ggplot2)
 
-TEMPLATE <- "../shared/retention_odds_ratio_slides.pptx"
+# Blank deck carrying the OHID master/theme/layouts (originally extracted
+# from the retention odds-ratio deck by deleting its slides).
+TEMPLATE <- "./templates/ohid_theme.pptx"
 RESULTS <- "./fit_summaries/tpm_odds_ratios.parquet"
 OUT <- "./slides/tpm_odds_ratio_slides.pptx"
 
@@ -20,7 +24,6 @@ FONT <- if ("Arial" %in% systemfonts::system_fonts()$family) {
 TABLE_FONT <- "Arial"
 SIG_FILL <- c(No = "#F8766D", Yes = "#00BFC4") # template uses ggplot defaults
 
-# Geometry lifted from the retention deck's slide XML (EMU / 914400 = inches)
 IMG_LOC <- officer::ph_location(
   left = 0.3937,
   top = 1.0977,
@@ -32,6 +35,8 @@ LAYOUT <- "2_content_large"
 
 HEADLINE_PERIOD <- "2026-03-31"
 
+# Slide order follows the retention deck (substance, age, housing,
+# referral, previous journeys), with region appended.
 ANALYSES <- list(
   substance_group = list(
     title = "Substance group treatment progress odds ratios",
@@ -42,6 +47,26 @@ ANALYSES <- list(
     title = "Age group treatment progress odds ratios",
     comparator = "Comparator: 18-24",
     column_label = "Age group"
+  ),
+  housing_start = list(
+    title = "Housing need at treatment start odds ratios",
+    comparator = "Comparator: No housing problem",
+    column_label = "Housing need at start"
+  ),
+  referral_source = list(
+    title = "Referral source treatment progress odds ratios",
+    comparator = "Comparator: Self, family & friends",
+    column_label = "Referral source"
+  ),
+  previous_journeys = list(
+    title = "Previous treatment journeys odds ratios",
+    comparator = "Comparator: 2-3 previous journeys",
+    column_label = "Previous journeys"
+  ),
+  region = list(
+    title = "Regional treatment progress odds ratios",
+    comparator = "Comparator: London",
+    column_label = "Region"
   )
 )
 

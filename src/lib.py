@@ -24,10 +24,11 @@ demographics and substance group.
 
 def make_basic_dataset(file_path):
     (
-        pl.read_csv(file_path)
+        pl.scan_csv(file_path)
         .filter(pl.col("variable").eq("InTx"))
         .group_by(DEMOGRAPHIC_COLS)
         .agg(pl.col("value").sum())
+        .collect()
         .write_parquet(
             "./data/tpm_Basic_dataset.parquet",
             metadata={

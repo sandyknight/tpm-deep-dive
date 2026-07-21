@@ -1,0 +1,6 @@
+# Machine-specific paths. Edit for your machine; keep flat key = "value"
+# lines — the Makefile and pipeline.R read this with plain text matching,
+# not a full TOML parser.
+
+# Raw NDTMS extract (OFFICIAL_SENSITIVE — must live outside the repo)
+raw_data = "../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv"

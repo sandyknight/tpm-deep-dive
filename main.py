@@ -1,7 +1,9 @@
-import polars as pl
+import tomllib
+
 from src import lib
 
-RAW_DATA = "../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv"
+with open("config.toml", "rb") as f:
+    RAW_DATA = tomllib.load(f)["raw_data"]
 
 def main():
     lib.make_basic_dataset(file_path=RAW_DATA)

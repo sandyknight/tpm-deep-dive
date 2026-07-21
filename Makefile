@@ -3,8 +3,9 @@
 # The OFFICIAL_SENSITIVE raw extract lives outside the repo and is never
 # copied into it.
 
-RAW := ../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv
-TEMPLATE := ../shared/retention_odds_ratio_slides.pptx
+# Raw-data location comes from config.toml (flat key = "value" extraction)
+RAW := $(shell sed -n 's/^raw_data *= *"\(.*\)".*/\1/p' config.toml)
+TEMPLATE := templates/ohid_theme.pptx
 
 # Override on machines without uv: make PYTHON=python
 # (No make at all, e.g. Windows? Use `Rscript pipeline.R` instead.)
@@ -14,7 +15,10 @@ PYTHON ?= uv run python
 # recipe also writes the 12 per-variable parquets (future GLMs will add
 # their inputs here as they start being consumed).
 DATA := data/tpm_Basic_dataset.parquet \
-        data/tpm_classification_completeness.parquet
+        data/tpm_classification_completeness.parquet \
+        data/tpm_AccmneedStart.parquet \
+        data/tpm_RefSrcGrp.parquet \
+        data/tpm_PrevJourneys.parquet
 FITS := fit_summaries/tpm_odds_ratios.parquet
 SLIDES := slides/tpm_odds_ratio_slides.pptx
 
@@ -22,7 +26,7 @@ all: $(SLIDES)
 
 # Grouped target (&:): one streaming pass over the raw CSV produces all the
 # parquets together, so the recipe runs once, not once per file.
-$(DATA) &: main.py src/lib.py $(RAW)
+$(DATA) &: main.py src/lib.py config.toml $(RAW)
 	$(PYTHON) main.py
 
 $(FITS): R/fit_models.R R/mod/models.R R/mod/lib.R $(DATA)
