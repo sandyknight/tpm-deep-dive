@@ -44,8 +44,11 @@ Rscript pipeline.R           # same stage-skipping as make
 Rscript pipeline.R --force   # rerun everything
 ```
 
-`pipeline.R` finds Python via `.venv`, then `PATH`; set the
-`PIPELINE_PYTHON` environment variable to point at a specific interpreter.
+`pipeline.R` finds Python via the `python` key in `config.toml` (the
+place to point at e.g. a conda env's `python.exe`), then `.venv`, then
+`PATH`. The `PIPELINE_PYTHON` environment variable also works for one-off
+shell overrides — but not from `~/.Renviron`, which R skips because the
+project ships its own `.Renviron`.
 
 ## Notes
 

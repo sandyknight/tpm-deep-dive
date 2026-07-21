@@ -49,9 +49,12 @@
 #       template, the checkout is incomplete.
 #
 # Stage [1] failures:
-#   "No Python found..."   -> see "How Python is found" below; easiest fix
-#       is setting the PIPELINE_PYTHON environment variable to the full
-#       path of a python.exe that has polars installed.
+#   "No Python found..." / "Configured python does not exist..." -> see
+#       "How Python is found" below; the intended fix is setting `python`
+#       in config.toml to the full path of a python.exe that has polars
+#       installed (conda env paths are fine). Don't use ~/.Renviron for
+#       this — the project ships its own .Renviron, and R only ever loads
+#       one of the two, so user-level entries are silently ignored.
 #   ModuleNotFoundError: polars / tomllib -> wrong interpreter (tomllib
 #       means Python < 3.11): pip install -r requirements.txt into the
 #       interpreter being used, or point PIPELINE_PYTHON at the right one.
@@ -80,14 +83,22 @@
 
 # --- Configuration ---------------------------------------------------------
 
-# raw_data comes from config.toml. This is a flat 'key = "value"' text
-# extraction, not a TOML parser (deliberate: no extra R dependency), so the
-# line in config.toml must stay in exactly that shape.
-RAW <- sub(
-  '^raw_data\\s*=\\s*"([^"]*)".*$',
-  "\\1",
-  grep("^raw_data\\s*=", readLines("config.toml"), value = TRUE)[[1]]
-)
+# Values come from config.toml via flat 'key = "value"' text extraction,
+# not a TOML parser (deliberate: no extra R dependency), so lines in
+# config.toml must stay in exactly that shape.
+config_value <- function(key) {
+  line <- grep(
+    sprintf('^%s\\s*=\\s*"', key),
+    readLines("config.toml"),
+    value = TRUE
+  )
+  if (length(line) == 0) {
+    return("")
+  }
+  sub('^[a-z_]+\\s*=\\s*"([^"]*)".*$', "\\1", line[[1]])
+}
+
+RAW <- config_value("raw_data")
 TEMPLATE <- "templates/ohid_theme.pptx"
 
 # Stage outputs. DATA lists only the parquets consumed downstream; stage
@@ -110,18 +121,39 @@ if (!file.exists("pipeline.R") || !dir.exists("R")) {
 
 # --- How Python is found ---------------------------------------------------
 # In order:
-#   1. PIPELINE_PYTHON environment variable, if set — always wins. Set it
-#      to a full path to python.exe when the automatic options misfire.
-#   2. The project virtualenv: .venv/Scripts/python.exe (Windows) or
+#   1. The `python` key in config.toml, if non-empty — the intended place
+#      for a machine-specific interpreter (e.g. a conda env's python.exe;
+#      forward slashes work on Windows).
+#   2. PIPELINE_PYTHON environment variable — same effect, for one-off
+#      overrides at the shell. NOTE the .Renviron trap: R loads exactly ONE
+#      .Renviron — the project's (which this repo ships, for the MKL fix)
+#      if it exists, else the user's — so a PIPELINE_PYTHON added to
+#      ~/.Renviron is silently ignored here. Prefer the config.toml key.
+#   3. The project virtualenv: .venv/Scripts/python.exe (Windows) or
 #      .venv/bin/python (elsewhere).
-#   3. First of python / python3 on PATH. Note the Microsoft Store
+#   4. First of python / python3 on PATH. Note the Microsoft Store
 #      "python" shim on Windows can be found here yet do nothing useful —
-#      that presents as stage [1] "failing" with no output; use
-#      PIPELINE_PYTHON to bypass it.
+#      that presents as stage [1] "failing" with no output; use the
+#      config.toml key to bypass it.
+#
+# An explicit interpreter (1 or 2) that doesn't exist on disk is an error
+# up front, with the bad path printed — not a cryptic mid-stage failure.
+#
+# Conda note: pointing straight at a conda env's python.exe (without
+# "conda activate") is usually fine for polars; if imports ever fail with
+# "DLL load failed", run stage [1] from an activated Anaconda prompt
+# instead: `python main.py`, then rerun this script for stages [2]-[3].
 find_python <- function() {
-  override <- Sys.getenv("PIPELINE_PYTHON", "")
-  if (nzchar(override)) {
-    return(override)
+  for (override in c(config_value("python"), Sys.getenv("PIPELINE_PYTHON"))) {
+    if (nzchar(override)) {
+      if (!file.exists(override)) {
+        stop(
+          "Configured python does not exist (or is not readable): ",
+          override
+        )
+      }
+      return(override)
+    }
   }
   venv <- if (.Platform$OS.type == "windows") {
     ".venv/Scripts/python.exe"
@@ -135,8 +167,8 @@ find_python <- function() {
   path <- path[nzchar(path)]
   if (length(path) == 0) {
     stop(
-      "No Python found. Create a .venv, put python on PATH, ",
-      "or set PIPELINE_PYTHON."
+      "No Python found. Set `python` in config.toml, create a .venv, ",
+      "or put python on PATH."
     )
   }
   path[[1]]
