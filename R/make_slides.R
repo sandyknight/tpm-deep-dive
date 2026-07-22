@@ -31,6 +31,14 @@ IMG_LOC <- officer::ph_location(
   height = 5.6848
 )
 TAB_LOC <- officer::ph_location(left = 6.5399, top = 1.0976, width = 6.4699)
+# Full-slide chart area (16:9 slide is 13.333in wide; margins match IMG_LOC's
+# left margin) — used for annual plots flagged annual_full_slide.
+FULL_IMG_LOC <- officer::ph_location(
+  left = 0.3937,
+  top = 1.0977,
+  width = 12.5459,
+  height = 5.6848
+)
 LAYOUT <- "2_content_large"
 
 HEADLINE_PERIOD <- "2026-03-31"
@@ -66,7 +74,9 @@ ANALYSES <- list(
   region = list(
     title = "Regional treatment progress odds ratios",
     comparator = "Comparator: London",
-    column_label = "Region"
+    column_label = "Region",
+    # Nine facetted regions don't fit the half-slide chart area
+    annual_full_slide = TRUE
   )
 )
 
@@ -154,6 +164,13 @@ forest_plot <- function(d, spec) {
 }
 
 annual_plot <- function(d, spec) {
+  # Full-slide plots get slightly smaller text: the panels are roomier, so
+  # the labels don't need to fight for space.
+  sz <- if (isTRUE(spec$annual_full_slide)) {
+    list(axis = 10, axis_x = 8, strip = 11, legend = 11)
+  } else {
+    list(axis = 12, axis_x = 9, strip = 12, legend = 12)
+  }
   d$year <- as.integer(substr(d$data_period, 1, 4))
   d$significant <- factor(
     ifelse(d$conf.low > 1 | d$conf.high < 1, "Yes", "No"),
@@ -180,7 +197,11 @@ annual_plot <- function(d, spec) {
       name = "Statistically significant at 95% level"
     ) +
     scale_x_continuous(breaks = years, labels = years) +
-    facet_wrap(~level, ncol = 3, labeller = label_wrap_gen(16)) +
+    facet_wrap(
+      ~level,
+      ncol = if (isTRUE(spec$annual_full_slide)) 4 else 3,
+      labeller = label_wrap_gen(16)
+    ) +
     labs(
       title = spec$title,
       subtitle = spec$comparator,
@@ -189,18 +210,19 @@ annual_plot <- function(d, spec) {
     theme_tpm() +
     theme(
       axis.title.x = element_blank(),
-      axis.text.x = element_text(size = 9, angle = 70),
+      axis.text = element_text(size = sz$axis),
+      axis.text.x = element_text(size = sz$axis_x, angle = 70),
       strip.text = element_text(
         face = "bold",
         hjust = 0,
-        size = 12,
+        size = sz$strip,
         colour = "black"
       ),
       panel.spacing = unit(1.2, "lines"),
       legend.position = "bottom",
       legend.justification = "left",
-      legend.title = element_text(size = 12),
-      legend.text = element_text(size = 12)
+      legend.title = element_text(size = sz$legend),
+      legend.text = element_text(size = sz$legend)
     )
 }
 
@@ -234,9 +256,9 @@ or_table <- function(d, spec) {
     flextable::width(j = 3:5, width = 0.87)
 }
 
-save_png <- function(plot) {
+save_png <- function(plot, loc = IMG_LOC) {
   path <- tempfile(fileext = ".png")
-  ggsave(path, plot, width = 5.9867, height = 5.6848, dpi = 300)
+  ggsave(path, plot, width = loc$width, height = loc$height, dpi = 300)
   path
 }
 
@@ -267,14 +289,15 @@ for (name in names(ANALYSES)) {
     ) |>
     officer::ph_with(or_table(headline, spec), location = TAB_LOC)
 
+  annual_loc <- if (isTRUE(spec$annual_full_slide)) FULL_IMG_LOC else IMG_LOC
   pres <- officer::add_slide(pres, layout = LAYOUT, master = master) |>
     officer::ph_with(
       officer::external_img(
-        save_png(annual_plot(d, spec)),
-        width = IMG_LOC$width,
-        height = IMG_LOC$height
+        save_png(annual_plot(d, spec), annual_loc),
+        width = annual_loc$width,
+        height = annual_loc$height
       ),
-      location = IMG_LOC
+      location = annual_loc
     )
 }
 
