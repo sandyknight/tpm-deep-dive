@@ -8,7 +8,7 @@ between the two stages.
 ## Layout
 
 - `main.py`, `src/` — pre-processing (raw CSV → `data/*.parquet`)
-- `R/fit_models.R`, `R/mod/` — weighted binomial GLMs → `fit_summaries/`
+- `R/fit_models.R`, `R/models.R` — weighted binomial GLMs → `fit_summaries/`
 - `R/make_slides.R` — OR slide deck → `slides/`
 - `Makefile` / `pipeline.R` — orchestrators (see below)
 

@@ -1,5 +1,3 @@
-box::use(. / mod / lib)
-
 BASIC_DATA <- "./data/tpm_Basic_dataset.parquet"
 AGE <- "age_jy.output.grp_value"
 SUBSTANCE <- "drug.grp_ocu_value"
@@ -69,8 +67,26 @@ ANALYSES <- list(
   )
 )
 
+# Keep only LA x period cells meeting the 80% classification-completeness
+# threshold (join on the completeness parquet, filter, drop the flag).
+completeness_filter <- function(df) {
+  stopifnot(
+    c("data_period", "dat", "dat.value", "region") %in% colnames(df)
+  )
+  dplyr::left_join(
+    df,
+    nanoparquet::read_parquet(
+      "./data/tpm_classification_completeness.parquet"
+    ) |>
+      dplyr::select(data_period, dat, dat.value, region, meets_80pct),
+    by = dplyr::join_by(data_period, dat, dat.value, region)
+  ) |>
+    dplyr::filter(meets_80pct == TRUE) |>
+    dplyr::select(-meets_80pct)
+}
+
 prep_dataset <- function(spec) {
-  d <- lib$completeness_filter(nanoparquet::read_parquet(spec$file)) |>
+  d <- completeness_filter(nanoparquet::read_parquet(spec$file)) |>
     dplyr::mutate(
       tpm_value = dplyr::recode_values(
         tpm_value,
@@ -110,20 +126,20 @@ annual_periods <- datasets[[1]] |>
 
 # Runs one fit on a mirai daemon. Daemons are fresh processes (which is why
 # this parallelises on Windows too, unlike forking), so the function must be
-# self-contained: the box module is loaded inside the worker via box.path,
-# and each job carries its own already-prepared data.
+# self-contained: the fitting functions are source()d inside the worker from
+# a carried absolute path (local = TRUE puts them in one environment so they
+# can find each other), and each job carries its own already-prepared data.
 fit_job <- purrr::in_parallel(
   \(job) {
     Sys.setenv(MKL_NUM_THREADS = "2") # workers mustn't oversubscribe BLAS
-    options(box.path = box_path)
-    box::use(mod / models)
-    res <- models$fit_exposure_glm(
+    source(models_path, local = TRUE)
+    res <- fit_exposure_glm(
       job$data,
       exposure = job$spec$exposure,
       adjust = job$spec$adjust,
       geography = job$spec$geography
     )
-    models$tidy_ors(res$fit, job$spec$exposure) |>
+    tidy_ors(res$fit, job$spec$exposure) |>
       dplyr::mutate(
         analysis = job$name,
         data_period = job$label,
@@ -132,7 +148,7 @@ fit_job <- purrr::in_parallel(
         .before = 1
       )
   },
-  box_path = file.path(getwd(), "R")
+  models_path = file.path(getwd(), "R", "models.R")
 )
 
 make_job <- function(name, spec, periods, label) {

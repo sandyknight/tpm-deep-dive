@@ -29,7 +29,7 @@ all: $(SLIDES)
 $(DATA) &: main.py src/lib.py config.toml $(RAW)
 	$(PYTHON) main.py
 
-$(FITS): R/fit_models.R R/mod/models.R R/mod/lib.R $(DATA)
+$(FITS): R/fit_models.R R/models.R $(DATA)
 	Rscript R/fit_models.R
 
 $(SLIDES): R/make_slides.R $(FITS) $(TEMPLATE)

@@ -65,9 +65,9 @@
 #   "there is no package called ..." -> renv library not restored (run
 #       renv::restore() in an R session here), or R was started somewhere
 #       that skipped .Rprofile so the system library is being used.
-#   box "unable to load module" -> almost always working-directory related;
-#       both R stages resolve mod/ relative to the R/ directory and data
-#       relative to the project root, so run them exactly as shown above.
+#   "cannot open file 'R/models.R'" or similar -> working directory isn't
+#       the project root; both R stages resolve every path relative to it,
+#       so run them exactly as shown above.
 #   Stage [2] parallelises via mirai daemons (separate Rscript processes,
 #       works on Windows). If a daemon dies silently, rerun after
 #       mirai::daemons(0) in a fresh session, or check a corporate
@@ -220,7 +220,7 @@ if (force || stale(DATA, c("main.py", "src/lib.py", "config.toml", RAW))) {
 
 if (
   force ||
-    stale(FITS, c("R/fit_models.R", "R/mod/models.R", "R/mod/lib.R", DATA))
+    stale(FITS, c("R/fit_models.R", "R/models.R", DATA))
 ) {
   run_stage("fits", rscript, "R/fit_models.R")
 } else {

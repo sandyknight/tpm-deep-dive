@@ -1,14 +1,18 @@
-#' Fit one weighted logistic regression for a single exposure and return the
-#' fit plus what happened geographically.
-#'
-#' geography = NULL fits at national level (no geography term). geography =
-#' "la" adjusts for LA (`dat.value`) but falls back to `region` if the LA fit
-#' shows separation ("fitted probabilities numerically 0 or 1" warning) —
-#' sparse LA x covariate cells make this likely. The region fallback swaps the
-#' term rather than aggregating rows: with aggregated count data the weighted
-#' GLM is identical either way.
-#'
-#' @export
+# Fitting machinery, source()d by R/fit_models.R into each mirai worker
+# (source(models_path, local = TRUE), which keeps these functions in one
+# shared environment so they can find each other). Everything here is fully
+# package-qualified — no library() calls, nothing needed from the caller.
+
+# Fit one weighted logistic regression for a single exposure and return the
+# fit plus what happened geographically.
+#
+# geography = NULL fits at national level (no geography term). geography =
+# "la" adjusts for LA (`dat.value`) but falls back to `region` if the LA fit
+# shows separation ("fitted probabilities numerically 0 or 1" warning) —
+# sparse LA x covariate cells make this likely. The region fallback swaps the
+# term rather than aggregating rows: with aggregated count data the weighted
+# GLM is identical either way.
+#
 fit_exposure_glm <- function(
   data,
   exposure,
@@ -67,14 +71,13 @@ fit_once <- function(data, rhs) {
   list(fit = fit, separation = separation)
 }
 
-#' Odds ratios with profile-likelihood CIs for the exposure terms only.
-#'
-#' Profiling is restricted to the exposure coefficients so the LA-adjusted
-#' fits stay fast (broom::tidy(conf.int = TRUE) would profile every LA dummy
-#' too); the intervals are identical to what broom returns. The reference
-#' level is included as a row with OR = 1 and no CI, for plotting.
-#'
-#' @export
+# Odds ratios with profile-likelihood CIs for the exposure terms only.
+#
+# Profiling is restricted to the exposure coefficients so the LA-adjusted
+# fits stay fast (broom::tidy(conf.int = TRUE) would profile every LA dummy
+# too); the intervals are identical to what broom returns. The reference
+# level is included as a row with OR = 1 and no CI, for plotting.
+#
 tidy_ors <- function(fit, exposure) {
   est <- broom::tidy(fit, exponentiate = TRUE) |>
     dplyr::filter(startsWith(term, exposure))
