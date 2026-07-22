@@ -20,7 +20,8 @@
 #
 # What this script assumes:
 #   - Working directory is the project root (it stops immediately if not).
-#   - config.toml's raw_data points at the raw NDTMS extract.
+#   - config.toml exists (it is machine-local, not committed: copy
+#     config.example.toml) and its raw_data points at the raw NDTMS extract.
 #   - R packages restored: renv::restore() has been run (renv activates
 #     itself through the project .Rprofile whenever R starts in this
 #     directory — including the Rscript children this script launches).
@@ -42,6 +43,9 @@
 # Failures BEFORE any stage runs:
 #   "Run this from the project root"  -> cd to the repo first; relative
 #       paths everywhere in the pipeline assume it.
+#   "config.toml not found"           -> it is machine-local and never
+#       committed; copy config.example.toml to config.toml and edit the
+#       paths for this machine.
 #   "Missing pipeline input(s): ..."  -> an *input* file doesn't exist.
 #       If it names the raw CSV, config.toml's raw_data is wrong for this
 #       machine (note it is relative to the project root, and forward
@@ -98,6 +102,19 @@ config_value <- function(key) {
   sub('^[a-z_]+\\s*=\\s*"([^"]*)".*$', "\\1", line[[1]])
 }
 
+# Refuse to run from anywhere but the project root: every path in this
+# script is root-relative, and the R stages assume it too. Both checks must
+# precede the config_value() call below, which reads config.toml.
+if (!file.exists("pipeline.R") || !dir.exists("R")) {
+  stop("Run this from the project root: Rscript pipeline.R")
+}
+if (!file.exists("config.toml")) {
+  stop(
+    "config.toml not found. It is machine-local (not committed): ",
+    "copy config.example.toml to config.toml and edit it for this machine."
+  )
+}
+
 RAW <- config_value("raw_data")
 TEMPLATE <- "templates/ohid_theme.pptx"
 
@@ -113,11 +130,6 @@ DATA <- c(
 FITS <- "fit_summaries/tpm_odds_ratios.parquet"
 SLIDES <- "slides/tpm_odds_ratio_slides.pptx"
 
-# Refuse to run from anywhere but the project root: every path above is
-# root-relative, and the R stages assume it too.
-if (!file.exists("pipeline.R") || !dir.exists("R")) {
-  stop("Run this from the project root: Rscript pipeline.R")
-}
 
 # --- How Python is found ---------------------------------------------------
 # In order:

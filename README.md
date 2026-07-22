@@ -12,13 +12,16 @@ between the two stages.
 - `R/make_slides.R` — OR slide deck → `slides/`
 - `Makefile` / `pipeline.R` — orchestrators (see below)
 
-The raw extract lives outside the repo (never committed); its location is
-set in `config.toml` (`raw_data`, default `../shared/...`). The slide theme
-is self-contained: `templates/ohid_theme.pptx` is a blank deck carrying the
-OHID master/layouts.
+Machine-specific paths live in `config.toml`, which is not committed:
+copy `config.example.toml` to `config.toml` and uncomment/edit the lines
+for your machine (raw-data location, optionally a Python interpreter).
+The raw extract itself lives outside the repo and is never committed. The
+slide theme is self-contained: `templates/ohid_theme.pptx` is a blank deck
+carrying the OHID master/layouts.
 
 ## Prerequisites
 
+- **`config.toml`**: `cp config.example.toml config.toml`, then edit.
 - **Python ≥ 3.12** with polars. With uv this is automatic; without it:
   `python -m venv .venv`, activate, `pip install -r requirements.txt`.
 - **R ≥ 4.5.1**: packages are pinned with renv — from an R session in the

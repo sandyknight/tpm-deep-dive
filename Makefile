@@ -3,7 +3,11 @@
 # The OFFICIAL_SENSITIVE raw extract lives outside the repo and is never
 # copied into it.
 
-# Raw-data location comes from config.toml (flat key = "value" extraction)
+# Raw-data location comes from config.toml (flat key = "value" extraction).
+# config.toml is machine-local and never committed — copy the example.
+ifeq ($(wildcard config.toml),)
+$(error config.toml not found; copy config.example.toml to config.toml and edit it for this machine)
+endif
 RAW := $(shell sed -n 's/^raw_data *= *"\(.*\)".*/\1/p' config.toml)
 TEMPLATE := templates/ohid_theme.pptx
 

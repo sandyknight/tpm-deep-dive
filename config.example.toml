@@ -1,0 +1,19 @@
+# Machine-specific paths. config.toml itself is not committed: copy this
+# file to config.toml and uncomment/edit the lines for your machine.
+#
+# Keep flat key = "value" lines — the Makefile and pipeline.R read this
+# with plain text matching, not a full TOML parser — and leave at most one
+# uncommented line per key.
+
+# Raw NDTMS extract (OFFICIAL_SENSITIVE — must live outside the repo).
+# Relative paths are resolved from the project root; forward slashes are
+# fine on Windows.
+raw_data = "../shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv"
+# Windows, absolute path:
+# raw_data = "C:/Users/me/shared/OFFICIAL_SENSITIVE_TPM_data_2026-06_v7.csv"
+
+# Python interpreter for the pre-processing stage. Leave empty to
+# auto-detect (.venv, then PATH); set a full path to override.
+python = ""
+# Windows conda env (point at the env's own python.exe):
+# python = "C:/Users/me/AppData/Local/miniconda3/envs/tpm/python.exe"

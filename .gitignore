@@ -1,3 +1,6 @@
+# Machine-specific config (copy config.example.toml to config.toml)
+config.toml
+
 # Data and outputs (data-derived, not committable)
 data/
 fit_summaries/
